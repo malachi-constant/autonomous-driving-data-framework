@@ -5,21 +5,7 @@ import boto3
 import pyspark.sql.functions as func
 from pyspark.sql import SparkSession, Window
 from pyspark.sql.functions import aggregate, col, collect_list, concat, count, first, from_json, lit, split, sum
-from pyspark.sql.types import *
 
-obj_schema = StructType(
-    [
-        StructField("_c0", IntegerType(), True),
-        StructField("xmin", DoubleType(), True),
-        StructField("ymin", DoubleType(), True),
-        StructField("xmax", DoubleType(), True),
-        StructField("ymax", DoubleType(), True),
-        StructField("confidence", DoubleType(), True),
-        StructField("class", IntegerType(), True),
-        StructField("name", StringType(), True),
-        StructField("source_image", StringType(), True),
-    ]
-)
 
 
 def parse_arguments(args):
@@ -63,6 +49,7 @@ def form_object_in_lane_df(obj_df, lane_df):
 def get_batch_file_metadata(table_name, batch_id, region):
     dynamodb = boto3.resource("dynamodb", region_name=region)
     table = dynamodb.Table(table_name)
+    print(f"debug: {table}")
     response = table.query(KeyConditions={"pk": {"AttributeValueList": [batch_id], "ComparisonOperator": "EQ"}})
     data = response["Items"]
     while "LastEvaluatedKey" in response:
