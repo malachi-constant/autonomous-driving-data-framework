@@ -1,8 +1,19 @@
-from pyspark.sql.types import *
 import os
-from image_dags import detect_scenes
+
+from pyspark.sql.types import ArrayType, IntegerType
+
 from image_dags.detect_scenes import *
-import subprocess
+
+
+def create_spark_session(port: int):
+    os.environ["PYSPARK_SUBMIT_ARGS"] = '--packages "org.apache.hadoop:hadoop-aws:3.3.1" pyspark-shell'
+    spark = SparkSession.builder.getOrCreate()
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    hadoop_conf.set("fs.s3a.access.key", "dummy-value")
+    hadoop_conf.set("fs.s3a.secret.key", "dummy-value")
+    hadoop_conf.set("fs.s3a.endpoint", f"http://127.0.0.1:{port}")
+    hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+    return spark
 
 
 def test_get_batch_file_metadata(moto_dynamodb):
@@ -41,35 +52,31 @@ def test_detect_scenes_parse_arguments():
     assert args.output_dynamo_table == "mytable"
     assert args.region == "us-east-1"
 
-def test_load_lane_detection():
-    # start moto server, by default it runs on localhost on port 5000.
-    process = subprocess.Popen(
-        "moto_server s3", stdout=subprocess.PIPE,
-        shell=True, preexec_fn=os.setsid
-    )
-    # create an s3 connection that points to the moto server. 
-    s3_conn = boto3.resource(
-        "s3", endpoint_url="http://127.0.0.1:5000"
-    )
+
+def test_load_lane_detection(moto_server):
+    port = moto_server
+    s3 = boto3.resource("s3", endpoint_url=f"http://127.0.0.1:{port}")
     # create an S3 bucket.
-    s3_conn.create_bucket(Bucket="bucket")
-    # configure pyspark to use hadoop-aws module.
-    # notice that we reference the hadoop version we installed.
-    os.environ[
-        "PYSPARK_SUBMIT_ARGS"
-    ] = '--packages "org.apache.hadoop:hadoop-aws:2.7.3" pyspark-shell'
-    # get the spark session object and hadoop configuration.
-    spark = SparkSession.builder.getOrCreate()
-    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
-    # mock the aws credentials to access s3.
-    hadoop_conf.set("fs.s3a.access.key", "dummy-value")
-    hadoop_conf.set("fs.s3a.secret.key", "dummy-value")
-    # we point s3a to our moto server.
-    hadoop_conf.set("fs.s3a.endpoint", "http://127.0.0.1:5000")
-    # we need to configure hadoop to use s3a.
-    hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-    sample_metadata = [{"raw_image_bucket": "mybucket", "drive_id": "test-vehichle-01", "file_id": "this.jpg", 's3_key': 'test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_/1280_720_post_lane_dets/lanes.csv'}]
+    s3.create_bucket(Bucket="mybucket")
+    object = s3.Object(
+        "mybucket",
+        "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_lane_dets/lanes.csv",
+    )
+    data = b"lanes"
+    object.put(Body=data)
+    spark = create_spark_session(port=port)
+    sample_metadata = [
+        {
+            "raw_image_bucket": "mybucket",
+            "drive_id": "test-vehichle-01",
+            "file_id": "this.jpg",
+            "s3_bucket": "mybucker",
+            "s3_key": "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_/1280_720_post_lane_dets/lanes.csv",
+        }
+    ]
     load_lane_detection(spark, sample_metadata)
+    spark.stop()
+
 
 # def test_detect_scenes_load_obj_detection(moto_s3):
 #     detect_scenes.obj_schema = StructType(

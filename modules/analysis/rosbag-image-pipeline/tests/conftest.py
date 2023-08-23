@@ -1,10 +1,14 @@
 # conftest.py
 import os
+import random
+
 import boto3
 import moto
 import pytest
+from moto.server import ThreadedMotoServer
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
+
 
 @pytest.fixture(scope="function")
 def moto_s3():
@@ -19,7 +23,7 @@ def moto_s3():
         )
         object2 = s3.Object(
             "mybucket",
-            "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_lane_dets/lanes.csv"
+            "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_lane_dets/lanes.csv",
         )
         data = b"Here we have some data"
         object.put(Body=data)
@@ -40,18 +44,10 @@ def moto_dynamodb():
         yield dynamodb
 
 
-@pytest.fixture(scope="session")
-def spark():
-    os.environ["PYSPARK_SUBMIT_ARGS"] = (
-    '--packages "org.apache.hadoop:hadoop-aws:3.3.1" pyspark-shell'
-    )
-    spark = SparkSession.builder.getOrCreate()
-
-    # Setup spark to use s3, and point it to the moto server.
-    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
-    hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-    hadoop_conf.set("fs.s3a.access.key", "mock")
-    hadoop_conf.set("fs.s3a.secret.key", "mock")
-    hadoop_conf.set("fs.s3a.endpoint", "http://127.0.0.1:5000")
-    yield spark 
-    spark.stop()
+@pytest.fixture(scope="function")
+def moto_server():
+    port = random.randint(5001, 8999)
+    server = ThreadedMotoServer(port=port)
+    server.start()
+    yield port
+    server.stop()

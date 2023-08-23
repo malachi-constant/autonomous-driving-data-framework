@@ -4,6 +4,7 @@
 # to these versions
 
 pytest-spark
+'moto[server]'
 apache-airflow~=2.5.2
 apache-airflow-providers-amazon~=7.2.1
 mypy-boto3-sqs
