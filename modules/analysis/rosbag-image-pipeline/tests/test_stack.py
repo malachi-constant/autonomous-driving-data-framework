@@ -78,32 +78,38 @@ def test_load_lane_detection(moto_server):
     spark.stop()
 
 
-# def test_detect_scenes_load_obj_detection(moto_s3):
-#     detect_scenes.obj_schema = StructType(
-#         [
-#             StructField("_c0", IntegerType(), True),
-#             StructField("xmin", DoubleType(), True),
-#             StructField("ymin", DoubleType(), True),
-#             StructField("xmax", DoubleType(), True),
-#             StructField("ymax", DoubleType(), True),
-#             StructField("confidence", DoubleType(), True),
-#             StructField("class", IntegerType(), True),
-#             StructField("name", StringType(), True),
-#             StructField("source_image", StringType(), True),
-#         ]
-#     )
-#     import os
-#     os.environ["PYSPARK_SUBMIT_ARGS"] = (
-#     '--packages "org.apache.hadoop:hadoop-aws:3.3.1" pyspark-shell'
-#     )
-#     spark = SparkSession.builder.getOrCreate()
+def test_load_obj_detection(moto_server):
+    port = moto_server
+    s3 = boto3.resource("s3", endpoint_url=f"http://127.0.0.1:{port}")
+    s3.create_bucket(Bucket="mybucket2")
+    object = s3.Object(
+        "mybucket2",
+        "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_obj_dets/all_predictions.csv",
+    )
+    data = b"all_predictions"
+    object.put(Body=data)
+    spark = create_spark_session(port=port)
+    sample_metadata = [
+        {
+            "raw_image_bucket": "mybucket2",
+            "drive_id": "test-vehichle-01",
+            "file_id": "this.jpg",
+        }
+    ]
+    load_obj_detection(spark, sample_metadata)
+    spark.stop()
 
-#     # Setup spark to use s3, and point it to the moto server.
-#     hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
-#     hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-#     hadoop_conf.set("fs.s3a.access.key", "mock")
-#     hadoop_conf.set("fs.s3a.secret.key", "mock")
-#     hadoop_conf.set("fs.s3a.endpoint", "http://127.0.0.1:5000")
-#     sample_metadata = [{"raw_image_bucket": "mybucket", "drive_id": "test-vehichle-01", "file_id": "this.jpg"}]
-#     results = load_obj_detection(spark, batch_metadata=sample_metadata)
-#     print(results)
+
+def test_write_results_to_s3(moto_server):
+    port = moto_server
+    s3 = boto3.resource("s3", endpoint_url=f"http://127.0.0.1:{port}")
+    s3.create_bucket(Bucket="outputbucket")
+    spark = create_spark_session(port=port)
+    df = spark.createDataFrame(
+        [
+            (1, "foo"),
+            (2, "bar"),
+        ],
+        ["id", "bag_file"],
+    )
+    write_results_s3(df, table_name="scene_detections", output_bucket="outputbucket", partition_cols=["bag_file"])

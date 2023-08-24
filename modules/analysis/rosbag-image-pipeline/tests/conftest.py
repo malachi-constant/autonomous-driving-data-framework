@@ -6,29 +6,6 @@ import boto3
 import moto
 import pytest
 from moto.server import ThreadedMotoServer
-from pyspark.sql import SparkSession
-from pyspark.sql.types import *
-
-
-@pytest.fixture(scope="function")
-def moto_s3():
-    with moto.mock_s3():
-        s3 = boto3.resource("s3", region_name="us-east-1")
-        s3.create_bucket(
-            Bucket="mybucket",
-        )
-        object = s3.Object(
-            "mybucket",
-            "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_obj_dets/all_predictions.csv",
-        )
-        object2 = s3.Object(
-            "mybucket",
-            "test-vehichle-01/this/_flir_adk_rgb_front_right_image_raw_resized_1280_720_post_lane_dets/lanes.csv",
-        )
-        data = b"Here we have some data"
-        object.put(Body=data)
-        object2.put(Body=data)
-        yield s3
 
 
 @pytest.fixture(scope="function")
